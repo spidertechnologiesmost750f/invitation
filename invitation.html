@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adecco Sponsorship Letter Generator – TEST VERSION</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background:#eef2f5; margin:0; padding:20px; color:#333; }
+        .app-layout { display:flex; gap:20px; max-width:1450px; margin:0 auto; }
+        .form-container {
+            flex:1; background:#fff; padding:25px; border-radius:8px;
+            box-shadow:0 4px 12px rgba(0,0,0,0.08); max-width:420px; height:fit-content;
+        }
+        .form-container h2 {
+            color:#D32F2F; margin:0 0 15px 0; font-size:20px;
+            border-bottom:2px solid #D32F2F; padding-bottom:8px;
+        }
+        .upload-section {
+            background:#f8d7da; border:2px dashed #D32F2F;
+            padding:12px; border-radius:6px; text-align:center; margin-bottom:15px;
+        }
+        .upload-section label {
+            display:block; font-weight:bold; color:#721c24;
+            margin-bottom:6px; font-size:12px;
+        }
+        .upload-section input { font-size:12px; }
+        #ocrStatus { font-size:11px; color:#d9534f; margin-top:5px; font-weight:bold; }
+        .form-group { margin-bottom:10px; }
+        .form-group label {
+            display:block; font-weight:bold; font-size:11px;
+            margin-bottom:3px; color:#444;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width:100%; padding:7px; border:1px solid #ccc;
+            border-radius:4px; font-size:12px; box-sizing:border-box;
+        }
+        .action-buttons { display:flex; flex-direction:column; gap:10px; margin-top:15px; }
+        .btn {
+            width:100%; padding:11px; font-size:13px; font-weight:bold;
+            border-radius:4px; cursor:pointer; border:none; transition:background 0.2s;
+        }
+        .btn-toggle { background:#0275d8; color:#fff; }
+        .btn-toggle.active { background:#5cb85c; }
+        .btn-primary { background:#28a745; color:#fff; }
+        .btn-primary:hover { background:#218838; }
+        .btn-submit { background:#D32F2F; color:#fff; }
+        .btn-submit:hover { background:#b71c1c; }
+        .preview-container {
+            flex:2; background:#fff; padding:20px; border-radius:8px;
+            box-shadow:0 4px 12px rgba(0,0,0,0.08);
+            display:flex; justify-content:center; position:relative; overflow-x:auto;
+        }
+        .edit-indicator {
+            position:absolute; top:10px; right:20px; font-size:11px;
+            background:#fff3cd; color:#856404; padding:4px 10px;
+            border:1px solid #ffeeba; border-radius:4px; display:none; z-index:10;
+        }
+        #letter-paper {
+            width:794px; min-height:1123px; background:#fff;
+            padding:40px 45px; box-sizing:border-box; position:relative;
+            font-size:11px; line-height:1.4; color:#111;
+        }
+        #letter-paper[contenteditable="true"] {
+            outline:2px dashed #0275d8; background:#fafafa;
+        }
+        .watermark {
+            position:absolute; top:50%; left:50%;
+            transform:translate(-50%,-50%) rotate(-35deg);
+            font-size:42px; font-weight:900;
+            color:rgba(211,47,47,0.08); width:100%; text-align:center;
+            letter-spacing:2px; text-transform:uppercase;
+            pointer-events:none; user-select:none; z-index:1;
+        }
+        .letter-body { position:relative; z-index:2; }
+        .header-table, .details-table, .summary-table, .signature-table {
+            width:100%; border-collapse:collapse;
+        }
+        .company-title { color:#D32F2F; font-size:22px; font-weight:bold; letter-spacing:-0.5px; }
+        .company-subtitle { font-size:10px; font-weight:bold; color:#333; margin:2px 0 4px 0; }
+        .company-details { font-size:9px; color:#555; line-height:1.3; }
+        .ref-meta { text-align:right; font-size:9.5px; color:#333; line-height:1.4; }
+        hr.divider { border:none; border-top:1px solid #ccc; margin:10px 0 14px 0; }
+        .details-table td { padding:3px 0; vertical-align:top; }
+        .details-table td.label { width:120px; font-weight:bold; }
+        .doc-title { text-align:center; font-size:11px; font-weight:bold; margin:14px 0; color:#111; letter-spacing:0.3px; }
+        .content-text { margin-bottom:10px; text-align:justify; }
+        .summary-table { margin:12px 0; background:#fafafa; }
+        .summary-table td { border:1px solid #e0e0e0; padding:5px 8px; font-size:10px; }
+        .summary-table td.label { font-weight:bold; width:38%; color:#222; }
+        .steps-list { margin:6px 0 12px 0; padding-left:20px; }
+        .steps-list li { margin-bottom:4px; }
+        .signature-table { margin-top:25px; font-size:10px; }
+        .signature-table td { width:50%; vertical-align:top; }
+        .footer {
+            margin-top:30px; padding-top:8px; border-top:1px solid #ddd;
+            font-size:7.5px; color:#666; line-height:1.3;
+        }
+        .debug-box {
+            margin-top:15px; background:#f9f9f9; border:1px solid #ddd;
+            border-radius:4px; padding:8px; font-size:11px;
+            max-height:220px; overflow-y:auto; white-space:pre-wrap;
+        }
+        .info {
+            font-size:11px; color:#555; margin-top:8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-layout">
+    <div class="form-container">
+        <h2>Letter Generator – TEST</h2>
+        
+        <div class="upload-section">
+            <label>📄 Upload Candidate CV (PDF / DOCX / Image)</label>
+            <input type="file" id="cvFileInput" accept=".pdf, .docx, .txt, .png, .jpg, .jpeg, .bmp, .webp">
+            <div id="ocrStatus"></div>
+        </div>
+
+        <form id="letterForm">
+            <div class="form-group">
+                <label>Title</label>
+                <select id="inputTitle">
+                    <option value="Mr.">Mr.</option>
+                    <option value="Mrs.">Mrs.</option>
+                    <option value="Ms.">Ms.</option>
+                    <option value="Dr.">Dr.</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Candidate Full Name</label>
+                <input type="text" id="inputName" value="Matthew Chisom DANIEL">
+            </div>
+            <div class="form-group">
+                <label>Passport Number & Country</label>
+                <input type="text" id="inputPassport" value="B04491199 (Federal Republic of Nigeria)">
+            </div>
+            <div class="form-group">
+                <label>NIN</label>
+                <input type="text" id="inputNIN" value="87767845947">
+            </div>
+            <div class="form-group">
+                <label>Address</label>
+                <textarea id="inputAddress" rows="2">Daniels Compound, Umuagha Eziama, Obiato, Imo State, Nigeria</textarea>
+            </div>
+            <div class="form-group">
+                <label>Academic Qualification / Degree</label>
+                <input type="text" id="inputDegree" value="Bachelor of Medical Laboratory Science (Second Class Upper Division) from Imo State University">
+            </div>
+            <div class="form-group">
+                <label>Designated Position</label>
+                <input type="text" id="inputPosition" value="Medical Laboratory Scientist / Healthcare Specialist">
+            </div>
+            <div class="form-group">
+                <label>Contract Duration</label>
+                <input type="text" id="inputContract" value="3 Years (Renewable)">
+            </div>
+
+            <div class="action-buttons">
+                <button type="button" id="useCvBtn" class="btn btn-primary">
+                    ✅ Use CV Details to Create Letter
+                </button>
+                <button type="button" id="toggleEditBtn" class="btn btn-toggle">
+                    ✏️ Enable Direct On-Page Edit Mode
+                </button>
+                <button type="button" class="btn btn-submit" id="downloadBtn">
+                    📥 Download Printable PDF
+                </button>
+            </div>
+        </form>
+
+        <div class="info">
+            After uploading a CV, click “Use CV Details to Create Letter”.  
+            The letter will use at least the name from the CV if found.
+        </div>
+
+        <div class="debug-box" id="debugBox">
+            Raw extracted CV text will appear here...
+        </div>
+    </div>
+
+    <div class="preview-container">
+        <div id="editIndicator" class="edit-indicator">✏️ Edit Mode Active - You can click and edit any text directly</div>
+
+        <div id="letter-paper" contenteditable="false">
+            <div class="watermark">UK IMMIGRATION INVITATION LETTER</div>
+
+            <div class="letter-body">
+                <table class="header-table">
+                    <tr>
+                        <td>
+                            <div class="company-title">Adecco</div>
+                            <div class="company-subtitle">UK & IRELAND RECRUITMENT & SPONSORSHIP SERVICES</div>
+                            <div class="company-details">
+                                <strong>ADECCO UK LIMITED</strong><br>
+                                Registered Office: 10 Bishops Square, London, E1 6EG<br>
+                                Company Reg No: 00593232 | ICO Reg No: 25728822<br>
+                                Web: www.adecco.co.uk
+                            </div>
+                        </td>
+                        <td class="ref-meta">
+                            <strong>Ref:</strong> ADC/UK-SPON/2026/8842<br>
+                            <strong>Date:</strong> <span id="lblDate">26th August 2026</span>
+                        </td>
+                    </tr>
+                </table>
+
+                <hr class="divider">
+
+                <table class="details-table">
+                    <tr>
+                        <td class="label">Candidate Name:</td>
+                        <td>| <span id="lblCandidateName">Mr. Matthew Chisom DANIEL</span></td>
+                    </tr>
+                    <tr>
+                        <td class="label">Passport No:</td>
+                        <td>| <span id="lblPassport">B04491199 (Federal Republic of Nigeria)</span></td>
+                    </tr>
+                    <tr>
+                        <td class="label">NIN:</td>
+                        <td>| <span id="lblNIN">87767845947</span></td>
+                    </tr>
+                    <tr>
+                        <td class="label">Address:</td>
+                        <td>| <span id="lblAddress">Daniels Compound, Umuagha Eziama, Obiato, Imo State, Nigeria</span></td>
+                    </tr>
+                </table>
+
+                <div class="doc-title">OFFICIAL INVITATION & SKILLED WORKER VISA SPONSORSHIP OFFER</div>
+
+                <p class="content-text">Dear <span id="lblSalutation">Mr. Daniel</span>,</p>
+
+                <p class="content-text">
+                    On behalf of Adecco UK Limited, we are delighted to inform you that following the review of your academic qualifications—specifically your <span id="lblDegree">Bachelor of Medical Laboratory Science (Second Class Upper Division) from Imo State University</span>—and professional background, you have been successfully selected for employment and UK Skilled Worker Visa Sponsorship.
+                </p>
+
+                <p class="content-text">
+                    This official Invitation Letter serves as formal notification of our intent to sponsor your employment visa to work in the United Kingdom as a <span id="lblPositionBody">Medical Laboratory Scientist / Healthcare Specialist</span> under our approved UK Home Office Licensed Sponsor Status.
+                </p>
+
+                <div style="font-weight: bold; margin: 10px 0 4px 0;">Summary of Sponsorship & Role Details</div>
+
+                <table class="summary-table">
+                    <tr>
+                        <td class="label">Designated Position</td>
+                        <td>| <span id="lblPositionTable">Medical Laboratory Scientist / Clinical Specialist</span></td>
+                    </tr>
+                    <tr>
+                        <td class="label">Sponsoring Organization</td>
+                        <td>Adecco UK Limited (Reg No: 00593232)</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Sponsorship Type</td>
+                        <td>UK Skilled Worker Visa (Tier 2 Equivalent)</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Primary Location</td>
+                        <td>London/Partner Healthcare Trusts. United Kingdom</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Contract Duration</td>
+                        <td><span id="lblContract">3 Years (Renewable)</span></td>
+                    </tr>
+                    <tr>
+                        <td class="label">Certificate of Sponsorship (COS)</td>
+                        <td>Assigned upon acceptance of this formal offer</td>
+                    </tr>
+                </table>
+
+                <div class="content-text" style="font-weight: bold; margin-top: 10px;">Next Steps for Visa Application:</div>
+                <ol class="steps-list">
+                    <li>Sign and return the attached endorsement copy of this offer letter.</li>
+                    <li>Our immigration support team will issue your electronic Certificate of Sponsorship (CoS) Number.</li>
+                    <li>Complete your online Skilled Worker Visa application via the official UK Government portal (UKVI).</li>
+                    <li>Attend your biometric appointment at the designated TLScontact / VFS Global Visa Application Centre in Nigeria.</li>
+                </ol>
+
+                <p class="content-text">
+                    Adecco UK will render full assistance throughout your visa processing and relocation logistics. We look forward to welcoming you to our team in the United Kingdom.
+                </p>
+
+                <table class="signature-table">
+                    <tr>
+                        <td>
+                            <strong>Sarah Jenkins</strong><br>
+                            Head of International Recruitment & Sponsorship<br>
+                            Adecco Group UK & Ireland
+                        </td>
+                        <td>
+                            <strong><span id="lblSignatureName">Matthew Chisom DANIEL</span></strong><br>
+                            Candidate Acceptance Signature<br><br>
+                            Date: ____________________
+                        </td>
+                    </tr>
+                </table>
+
+                <div class="footer">
+                    Adecco UK Limited is an authorized temporary employment agency registered in England and Wales (Company Registration No: 00593232, ICO Registration No: 25728822). Registered Office: 10 Bishops Square, London, E1 6EG. Registered with the Information Commissioner's Office for data processing activities.
+                    <br><br>
+                    <strong>Adecco UK & Ireland Confidential</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+    // Form
+    const inputTitle     = document.getElementById('inputTitle');
+    const inputName      = document.getElementById('inputName');
+    const inputPassport  = document.getElementById('inputPassport');
+    const inputNIN       = document.getElementById('inputNIN');
+    const inputAddress   = document.getElementById('inputAddress');
+    const inputDegree    = document.getElementById('inputDegree');
+    const inputPosition  = document.getElementById('inputPosition');
+    const inputContract  = document.getElementById('inputContract');
+
+    // Letter labels
+    const lblCandidateName = document.getElementById('lblCandidateName');
+    const lblPassport      = document.getElementById('lblPassport');
+    const lblNIN           = document.getElementById('lblNIN');
+    const lblAddress       = document.getElementById('lblAddress');
+    const lblDegree        = document.getElementById('lblDegree');
+    const lblPositionBody  = document.getElementById('lblPositionBody');
+    const lblPositionTable = document.getElementById('lblPositionTable');
+    const lblContract      = document.getElementById('lblContract');
+    const lblSalutation    = document.getElementById('lblSalutation');
+    const lblSignatureName = document.getElementById('lblSignatureName');
+
+    const letterPaper      = document.getElementById('letter-paper');
+    const toggleEditBtn    = document.getElementById('toggleEditBtn');
+    const editIndicator    = document.getElementById('editIndicator');
+    const useCvBtn         = document.getElementById('useCvBtn');
+    const downloadBtn      = document.getElementById('downloadBtn');
+    const cvFileInput      = document.getElementById('cvFileInput');
+    const ocrStatus        = document.getElementById('ocrStatus');
+    const debugBox         = document.getElementById('debugBox');
+
+    let lastExtractedText = "";
+
+    // Initial render
+    updateLetterFromForm();
+
+    function updateLetterFromForm() {
+        const title   = inputTitle.value;
+        const name    = (inputName.value || "").trim();
+        const passport= (inputPassport.value || "").trim();
+        const nin     = (inputNIN.value || "").trim();
+        const address = (inputAddress.value || "").trim();
+        const degree  = (inputDegree.value || "").trim();
+        const position= (inputPosition.value || "").trim();
+        const contract= (inputContract.value || "").trim();
+
+        const nameParts = name.split(/\s+/).filter(Boolean);
+        const lastName  = nameParts.length > 0 ? nameParts[nameParts.length - 1] : name || "Candidate";
+
+        lblCandidateName.textContent = `${title} ${name}`;
+        lblPassport.textContent      = passport;
+        lblNIN.textContent           = nin;
+        lblAddress.textContent       = address;
+        lblDegree.textContent        = degree;
+        lblPositionBody.textContent  = position;
+        lblPositionTable.textContent = position;
+        lblContract.textContent      = contract;
+        lblSalutation.textContent    = `${title} ${lastName}`;
+        lblSignatureName.textContent = name;
+    }
+
+    [
+        inputTitle, inputName, inputPassport, inputNIN,
+        inputAddress, inputDegree, inputPosition, inputContract
+    ].forEach(el => el.addEventListener('input', updateLetterFromForm));
+
+    toggleEditBtn.addEventListener('click', () => {
+        const isEditable = letterPaper.isContentEditable;
+        letterPaper.contentEditable = !isEditable;
+        if (!isEditable) {
+            toggleEditBtn.textContent = "🔒 Lock & Save Direct Edits";
+            toggleEditBtn.classList.add('active');
+            editIndicator.style.display = 'block';
+        } else {
+            toggleEditBtn.textContent = "✏️ Enable Direct On-Page Edit Mode";
+            toggleEditBtn.classList.remove('active');
+            editIndicator.style.display = 'none';
+        }
+    });
+
+    useCvBtn.addEventListener('click', () => {
+        // If we have CV text, try to parse name at least
+        if (lastExtractedText) {
+            const nameFromCv = extractName(lastExtractedText);
+            if (nameFromCv) {
+                inputName.value = nameFromCv;
+            }
+        }
+        updateLetterFromForm();
+        alert("Letter updated. If a name was found in the CV, it has been applied.");
+    });
+
+    downloadBtn.addEventListener('click', () => {
+        const candidateName = (inputName.value || 'Candidate').replace(/\s+/g, '_');
+        const wasEditable = letterPaper.isContentEditable;
+        letterPaper.contentEditable = "false";
+
+        const opt = {
+            margin:       0,
+            filename:     `Adecco_Sponsorship_Letter_${candidateName}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, scrollY: 0, scrollX: 0 },
+            jsPDF:        { unit: 'pt', format: 'a4', orientation: 'portrait' }
+        };
+
+        html2pdf().set(opt).from(letterPaper).save().then(() => {
+            if (wasEditable) letterPaper.contentEditable = "true";
+        });
+    });
+
+    cvFileInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        ocrStatus.textContent = "";
+        debugBox.textContent = "Reading file...";
+        lastExtractedText = "";
+        let extractedText = "";
+        const fileName = file.name.toLowerCase();
+
+        try {
+            if (fileName.endsWith('.pdf')) {
+                ocrStatus.textContent = "Reading PDF...";
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    extractedText += textContent.items.map(item => item.str).join(" ") + "\n";
+                }
+            } else if (fileName.endsWith('.docx')) {
+                ocrStatus.textContent = "Reading DOCX...";
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({ arrayBuffer });
+                extractedText = result.value || "";
+            } else if (fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.bmp') || fileName.endsWith('.webp')) {
+                ocrStatus.textContent = "Scanning image with OCR...";
+                const result = await Tesseract.recognize(file, 'eng');
+                extractedText = result.data.text || "";
+            } else {
+                ocrStatus.textContent = "Reading text file...";
+                extractedText = await file.text();
+            }
+
+            ocrStatus.textContent = "";
+            lastExtractedText = extractedText;
+            debugBox.textContent = extractedText || "(No text extracted)";
+
+            // Try to auto-fill name immediately
+            const nameFromCv = extractName(extractedText);
+            if (nameFromCv) {
+                inputName.value = nameFromCv;
+                updateLetterFromForm();
+                alert("CV loaded. Name found and applied to the letter. Click 'Use CV Details to Create Letter' to refresh if needed.");
+            } else {
+                alert("CV loaded but no clear name found. You can edit the form manually, then click 'Use CV Details to Create Letter'.");
+            }
+
+        } catch (error) {
+            console.error(error);
+            ocrStatus.textContent = "Error reading file.";
+            debugBox.textContent = "Error: " + error.message;
+        }
+    });
+
+    // Very simple but aggressive name extractor
+    function extractName(text) {
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+        // Try "Name: ..." patterns
+        for (const line of lines) {
+            const m = line.match(/(?:name|full name|candidate name)\s*[:\-]\s*(.+)$/i);
+            if (m && m[1]) {
+                const candidate = m[1].trim();
+                if (candidate.split(/\s+/).length >= 2) return candidate;
+            }
+        }
+
+        // Try first line that looks like a person name (2+ words, mostly letters)
+        for (const line of lines) {
+            if (/^[A-Z][a-zA-Z]+\s+[A-Z][a-zA-Z]+/.test(line)) {
+                // Avoid obvious headers
+                if (/^(curriculum|cv|resume|profile|contact|education|experience)/i.test(line)) continue;
+                return line;
+            }
+        }
+
+        return null;
+    }
+</script>
+
+</body>
+</html>
